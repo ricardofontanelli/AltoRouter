@@ -1,5 +1,4 @@
 <?php
-
 class AltoRouter {
 
 	protected $routes = array();
@@ -26,21 +25,12 @@ class AltoRouter {
 		$this->setBasePath($basePath);
 		$this->addMatchTypes($matchTypes);
 	}
-	
-	/**
-	 * Retrieves all routes.
-	 * Useful if you want to process or display routes.
-	 * @return array All routes.
-	 */
-	public function getRoutes() {
-		return $this->routes;
-	}
 
 	/**
 	 * Add multiple routes at once from array in the following format:
 	 *
 	 *   $routes = array(
-	 *      array($method, $route, $target, $name)
+	 *      array($method, $route, $target, $fixedParams, $name)
 	 *   );
 	 *
 	 * @param array $routes
@@ -63,6 +53,22 @@ class AltoRouter {
 	public function setBasePath($basePath) {
 		$this->basePath = $basePath;
 	}
+	
+	/**
+	 * Set static parameters to be merged with matched parameters.
+ 	 * @param array $values A multidimensional array whith fixed values to merge with route $params.
+ 	 * @param array $routeKey the key of pre-defined route 
+	 * @return void
+	 */
+	public function setFixedParams( array $values = array(), $routeKey = null ) {
+		if( !is_null($routeKey) ){
+			$this->routes[$routeKey][4] = $values;
+		}
+		else{
+			$this->routes[end(array_keys($this->routes))][4] = $values; 
+		}
+		return;
+	}	
 
 	/**
 	 * Add named match types. It uses array_merge so keys can be overwritten.
@@ -76,14 +82,14 @@ class AltoRouter {
 	/**
 	 * Map a route to a target
 	 *
-	 * @param string $method One of 5 HTTP Methods, or a pipe-separated list of multiple HTTP Methods (GET|POST|PATCH|PUT|DELETE)
+	 * @param string $method One of 4 HTTP Methods, or a pipe-separated list of multiple HTTP Methods (GET|POST|PUT|DELETE)
 	 * @param string $route The route regex, custom regex must start with an @. You can use multiple pre-set regex filters, like [i:id]
 	 * @param mixed $target The target where this route should point to. Can be anything.
 	 * @param string $name Optional name of this route. Supply if you want to reverse route this url in your application.
 	 */
-	public function map($method, $route, $target, $name = null) {
+	public function map($method, $route, $target, $name = null, $fixedParams = null) {
 
-		$this->routes[] = array($method, $route, $target, $name);
+		$this->routes[] = array($method, $route, $target, $name, $fixedParams);
 
 		if($name) {
 			if(isset($this->namedRoutes[$name])) {
@@ -94,7 +100,7 @@ class AltoRouter {
 
 		}
 
-		return;
+		return $this;
 	}
 
 	/**
@@ -172,10 +178,10 @@ class AltoRouter {
 
 		// Force request_order to be GP
 		// http://www.mail-archive.com/internals@lists.php.net/msg33119.html
-		$_REQUEST = array_merge($_GET, $_POST);
+		//$_REQUEST = array_merge($_GET, $_POST);
 
 		foreach($this->routes as $handler) {
-			list($method, $_route, $target, $name) = $handler;
+			list($method, $_route, $target, $name, $fixedParams) = $handler;
 
 			$methods = explode('|', $method);
 			$method_match = false;
@@ -195,8 +201,7 @@ class AltoRouter {
 			if ($_route === '*') {
 				$match = true;
 			} elseif (isset($_route[0]) && $_route[0] === '@') {
-				$pattern = '`' . substr($_route, 1) . '`u';
-				$match = preg_match($pattern, $requestUrl, $params);
+				$match = preg_match('`' . substr($_route, 1) . '`u', $requestUrl, $params);
 			} else {
 				$route = null;
 				$regex = false;
@@ -237,7 +242,7 @@ class AltoRouter {
 
 				return array(
 					'target' => $target,
-					'params' => $params,
+					'params' => is_array($fixedParams) ? array_merge($fixedParams, $params) : $params,
 					'name' => $name
 				);
 			}
